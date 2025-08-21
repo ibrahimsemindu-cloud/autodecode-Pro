@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoDecode Pro - Professional OBD2 Diagnostics</title>
+    <meta name="description" content="Turn your phone into a professional-grade OBD2 scanner. Read codes, view live data, get repair guides, and diagnose your car like a pro.">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- PWA Settings -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    
+    <!-- Structured Data for SEO -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "AutoDecode Pro",
+      "applicationCategory": "UtilitiesApplication",
+      "operatingSystem": "Android, iOS",
+      "description": "Professional OBD2 car diagnostic scanner app.",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      }
+    }
+    </script>
+</head>
+<body class="bg-gradient-light h-full" x-data="appData()">
+    <!-- Loading Screen -->
+    <div x-show="isLoading" class="loading-screen" x-transition:leave="transition ease-in duration-300">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">Loading AutoDecode Pro...</p>
+    </div>
+
+    <div x-show="!isLoading" x-transition:enter="transition ease-out duration-300">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-car"></i>
+                    <div>
+                        <h1>AutoDecode Pro</h1>
+                        <p>Professional Diagnostics</p>
+                    </div>
+                </div>
+                <div class="header-status">
+                    <span x-show="isConnected" class="status-connected">
+                        <i class="fas fa-plug"></i> Connected
+                    </span>
+                    <span x-show="!isConnected" class="status-disconnected">
+                        <i class="fas fa-plug"></i> Disconnected
+                    </span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Navigation Tabs -->
+        <nav class="main-nav">
+            <button @click="activeTab = 'live'" :class="{ 'nav-btn-active': activeTab === 'live' }" class="nav-btn">
+                <i class="fas fa-gauge-high"></i> Live Data
+            </button>
+            <button @click="activeTab = 'codes'" :class="{ 'nav-btn-active': activeTab === 'codes' }" class="nav-btn">
+                <i class="fas fa-bug"></i> Codes
+            </button>
+            <button @click="activeTab = 'repair'" :class="{ 'nav-btn-active': activeTab === 'repair' }" class="nav-btn">
+                <i class="fas fa-wrench"></i> Repair
+            </button>
+            <button @click="activeTab = 'logging'" :class="{ 'nav-btn-active': activeTab === 'logging' }" class="nav-btn">
+                <i class="fas fa-chart-line"></i> Log
+            </button>
+            <button @click="activeTab = 'profile'" :class="{ 'nav-btn-active': activeTab === 'profile' }" class="nav-btn">
+                <i class="fas fa-user"></i> Profile
+            </button>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            
+            <!-- Tab 1: Live Data -->
+            <div x-show="activeTab === 'live'" class="tab-content">
+                <div class="card">
+                    <h2><i class="fas fa-car-side text-blue-600 mr-2"></i>Vehicle Information</h2>
+                    <div class="vin-section">
+                        <input type="text" x-model="vinInput" placeholder="Enter VIN (17 characters)" :disabled="isDecodingVIN" class="vin-input">
+                        <button @click="decodeVIN()" :disabled="!vinInput || vinInput.length !== 17 || isDecodingVIN" class="vin-btn">
+                            <i class="fas fa-bolt"></i> Decode
+                        </button>
+                    </div>
+                    
+                    <div class="vehicle-fields">
+                        <select x-model="make" @change="model = ''; year = ''">
+                            <option value="">Select Make</option>
+                            <template x-for="carMake in Object.keys(modelLists)">
+                                <option :value="carMake" x-text="carMake"></option>
+                            </template>
+                        </select>
+                        
+                        <select x-model="model" @change="year = ''" x-show="make">
+                            <option value="">Select Model</option>
+                            <template x-for="carModel in modelLists[make]">
+                                <option :value="carModel" x-text="carModel"></option>
+                            </template>
+                        </select>
+                        
+                        <select x-model="year" x-show="make && model">
+                            <option value="">Select Year</option>
+                            <template x-for="y in years()">
+                                <option :value="y" x-text="y"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2><i class="fas fa-bluetooth text-blue-600 mr-2"></i>Scanner Connection</h2>
+                    <button @click="initOBD2()" :disabled="isConnecting || !year" class="connect-btn">
+                        <span x-show="!isConnected && !isConnecting">
+                            <i class="fas fa-link"></i> Connect Scanner
+                        </span>
+                        <span x-show="isConnecting">
+                            <i class="fas fa-spinner fa-spin"></i> Connecting...
+                        </span>
+                        <span x-show="isConnected && !isConnecting">
+                            <i class="fas fa-unlink"></i> Disconnect
+                        </span>
+                    </button>
+
+                    <div x-show="isConnected" class="connection-controls">
+                        <button @click="startAdvancedScanning()" :disabled="isScanning" class="control-btn btn-success">
+                            <i class="fas fa-play" x-show="!isScanning"></i>
+                            <i class="fas fa-pause" x-show="isScanning"></i> Live Scan
+                        </button>
+                        <button @click="scanTroubleCodes()" class="control-btn btn-warning">
+                            <i class="fas fa-search"></i> Check Codes
+                        </button>
+                        <button @click="clearTroubleCodes()" class="control-btn btn-danger">
+                            <i class="fas fa-broom"></i> Clear Codes
+                        </button>
+                    </div>
+                </div>
+
+                <div x-show="isConnected" class="card">
+                    <h2><i class="fas fa-gauge-high text-blue-600 mr-2"></i>Live Data Dashboard</h2>
+                    <div class="gauges-grid">
+                        <div class="gauge-card">
+                            <div class="gauge-value" x-text="liveData.engine['010C']?.value || '0'"></div>
+                            <div class="gauge-label">RPM</div>
+                            <div class="gauge-bar">
+                                <div class="gauge-fill" :style="'width: ' + Math.min((liveData.engine['010C']?.value || 0) / 80, 100) + '%'"></div>
+                            </div>
+                        </div>
+                        <div class="gauge-card">
+                            <div class="gauge-value" x-text="liveData.engine['010D']?.value || '0'"></div>
+                            <div class="gauge-label">Speed km/h</div>
+                            <div class="gauge-bar">
+                                <div class="gauge-fill" :style="'width: ' + Math.min((liveData.engine['010D']?.value || 0) / 2, 100) + '%'"></div>
+                            </div>
+                        </div>
+                        <div class="gauge-card">
+                            <div class="gauge-value" x-text="liveData.engine['0104']?.value || '0'"></div>
+                            <div class="gauge-label">Load %</div>
+                            <div class="gauge-bar">
+                                <div class="gauge-fill" :style="'width: ' + Math.min((liveData.engine['0104']?.value || 0), 100) + '%'"></div>
+                            </div>
+                        </div>
+                        <div class="gauge-card">
+                            <div class="gauge-value" x-text="liveData.engine['0105']?.value || '0'"></div>
+                            <div class="gauge-label">Coolant °C</div>
+                            <div class="gauge-bar">
+                                <div class="gauge-fill" :style="'width: ' + Math.min((liveData.engine['0105']?.value || 0) / 1.2, 100) + '%'"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Other Tabs (Codes, Repair, Logging, Profile) would be here -->
+            <!-- The structure would be similar to the Live Data tab -->
+
+        </main>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="script.js"></script>
+</body>
+</html>
